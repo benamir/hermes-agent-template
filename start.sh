@@ -16,45 +16,47 @@ fi
 
 [ ! -f /data/.hermes/.env ] && touch /data/.hermes/.env
 
-# ── GBrain setup ──────────────────────────────────────────────────────────────
-# Install Bun and GBrain on first boot. Persisted under /data so it survives
-# redeploys. GBRAIN_DATABASE_URL and OPENAI_API_KEY come from Railway env vars.
-BUN_BIN="/data/.bun/bin/bun"
-GBRAIN_BIN="/data/.bun/bin/gbrain"
-GBRAIN_DIR="/data/.gbrain_install"
-BRAIN_REPO="/data/.hermes/brain"
+# ── GBrain setup (background) ─────────────────────────────────────────────────
+# Runs async so the healthcheck is not blocked by install time.
+(
+  BUN_BIN="/data/.bun/bin/bun"
+  GBRAIN_BIN="/data/.bun/bin/gbrain"
+  GBRAIN_DIR="/data/.gbrain_install"
+  BRAIN_REPO="/data/.hermes/brain"
 
-if [ ! -f "$BUN_BIN" ]; then
-  echo "[gbrain] Installing Bun..."
-  curl -fsSL https://bun.sh/install | BUN_INSTALL=/data/.bun bash
-fi
-
-export PATH=/data/.bun/bin:$PATH
-
-if [ ! -f "$GBRAIN_BIN" ] && [ -f "$BUN_BIN" ]; then
-  echo "[gbrain] Cloning and linking GBrain..."
-  mkdir -p "$GBRAIN_DIR"
-  git clone --depth 1 https://github.com/garrytan/gbrain.git "$GBRAIN_DIR"
-  cd "$GBRAIN_DIR" && bun install && bun link
-  cd /
-fi
-
-if [ -n "$GBRAIN_DATABASE_URL" ] && [ -f "$GBRAIN_BIN" ]; then
-  echo "[gbrain] Initialising brain schema..."
-  "$GBRAIN_BIN" init 2>/dev/null || true
-
-  if [ ! -d "$BRAIN_REPO" ]; then
-    echo "[gbrain] Creating brain repo..."
-    mkdir -p "$BRAIN_REPO"
-    git -C "$BRAIN_REPO" init -b main
-    git -C "$BRAIN_REPO" config user.email "hermes@flowdesk.ai"
-    git -C "$BRAIN_REPO" config user.name "Hermes"
+  if [ ! -f "$BUN_BIN" ]; then
+    echo "[gbrain] Installing Bun..."
+    curl -fsSL https://bun.sh/install | BUN_INSTALL=/data/.bun bash
   fi
 
-  echo "[gbrain] Syncing and embedding brain..."
-  "$GBRAIN_BIN" sync --repo "$BRAIN_REPO" 2>/dev/null || true
-  "$GBRAIN_BIN" embed --stale 2>/dev/null || true
-fi
+  export PATH=/data/.bun/bin:$PATH
+
+  if [ ! -f "$GBRAIN_BIN" ] && [ -f "$BUN_BIN" ]; then
+    echo "[gbrain] Cloning and linking GBrain..."
+    mkdir -p "$GBRAIN_DIR"
+    git clone --depth 1 https://github.com/garrytan/gbrain.git "$GBRAIN_DIR"
+    cd "$GBRAIN_DIR" && bun install && bun link
+    cd /
+  fi
+
+  if [ -n "$GBRAIN_DATABASE_URL" ] && [ -f "$GBRAIN_BIN" ]; then
+    echo "[gbrain] Initialising brain schema..."
+    "$GBRAIN_BIN" init 2>/dev/null || true
+
+    if [ ! -d "$BRAIN_REPO" ]; then
+      echo "[gbrain] Creating brain repo..."
+      mkdir -p "$BRAIN_REPO"
+      git -C "$BRAIN_REPO" init -b main
+      git -C "$BRAIN_REPO" config user.email "hermes@flowdesk.ai"
+      git -C "$BRAIN_REPO" config user.name "Hermes"
+    fi
+
+    echo "[gbrain] Syncing and embedding brain..."
+    "$GBRAIN_BIN" sync --repo "$BRAIN_REPO" 2>/dev/null || true
+    "$GBRAIN_BIN" embed --stale 2>/dev/null || true
+    echo "[gbrain] Brain ready."
+  fi
+) &
 # ─────────────────────────────────────────────────────────────────────────────
 
 exec python /app/server.py
