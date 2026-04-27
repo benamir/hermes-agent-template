@@ -98,6 +98,37 @@ GBrain is your long-term memory. Check it before web search or any external API.
 - Notability gate before creating new pages
 EOF
 
+
+    # Add Clawvisor skill so Hermes knows to use the gateway
+    mkdir -p /data/.hermes/skills/clawvisor
+    cat > /data/.hermes/skills/clawvisor/DESCRIPTION.md << 'EOF'
+---
+description: Clawvisor trusted gateway for Gmail and Google Calendar. Route all external service calls through Clawvisor — never call APIs directly.
+---
+
+# Clawvisor — Trusted Service Gateway
+
+Route ALL Gmail and Calendar calls through Clawvisor. Never use direct API keys.
+
+**Base URL:** $CLAWVISOR_URL  
+**Auth:** Bearer $CLAWVISOR_AGENT_TOKEN
+
+## Workflow
+1. POST /api/tasks?wait=true — declare scope + purpose
+2. POST /api/gateway/request?wait=true — execute with task_id
+3. POST /api/tasks/{id}/complete — clean up
+
+## Services
+- google.gmail:ben@flowdesk.ai — list_messages, get_message, get_thread, send_message, create_draft
+- google.calendar:ben@flowdesk.ai — list_events, get_event, create_event, update_event
+
+## Status codes
+- executed: use result.data
+- pending: poll /api/gateway/request/{id}/execute?wait=true  
+- blocked: do not retry
+- pending_scope_expansion: call /api/tasks/{id}/expand?wait=true
+EOF
+
     echo "[gbrain] Brain ready."
   fi
 ) &
